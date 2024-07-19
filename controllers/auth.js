@@ -1,8 +1,8 @@
 const bcrypt= require('bcrypt')
 const jwt = require('jsonwebtoken')
-//const OTP = require
+const OTP = require('../models/OTP')
 const otpGenerator = require('otp-generator')
-const User = require('./models/user')
+const User = require('../models/user')
 require('dotenv').config()
 
 // Signup handle
@@ -155,6 +155,59 @@ exports.login = async(req, res)=>{
         res.status(500).json({
             success: false,
             message :"Failed to Login:" + error
+        })
+    }
+}
+
+// handle Sending OTP for Email Verification
+exports.sendOtp = async (req,res) =>{
+    try {
+        const {email} = req.body
+        //checks if a user is found with provided email
+        const checkUser = await User.findOne({email})
+        //if existing user found return error message
+        if (checkUser) {
+            return res.status(401).json({
+                error: true,
+                message : "User is Already Registered"
+            })           
+        }
+        //Generate 6digit OTP
+        let otp = otpGenerator.generate(6,{
+            upperCaseAlphabets : false,
+            lowerCaseAlphabets: false,
+            specialChars: false
+        })
+        //Ensure otp is unique
+        let existingOtp = await OTP.findOne({otp})
+        console.log('Generated OTP:', otp)
+        console.log('Existing OTP:',existingOtp)
+
+        //if the generated OTP exists(notnull), regenerate until it is unique
+        while(existingOtp) {
+            otp =  otpGenerator.generate(6,{
+                upperCaseAlphabets : false,
+                lowerCaseAlphabets: false,
+                specialChars: false
+        })
+            existingOtp = await findOne({otp})
+        }
+        // Create OTP payload and store it in database
+
+        const otpPayload = {email,otp}
+        const otpBody = await OTP.create(otpPayload)
+        console.log("OTP Body", otpBody)
+        res.status(200).json({
+            otp,
+            success: true,
+            message : "OTP Sent Successfully"
+        })
+
+    }catch (error) {
+        console.error(error.message)
+        return res.status(500).json({
+            success: false,
+            error : error.message
         })
     }
 }
