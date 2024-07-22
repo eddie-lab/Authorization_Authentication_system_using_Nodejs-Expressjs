@@ -179,7 +179,7 @@ exports.sendOtp = async (req,res) =>{
             specialChars: false
         })
         //Ensure otp is unique
-        let existingOtp = await OTP.findOne({otp})
+        let existingOtp = await OTP.findOne({otp: otp})
         console.log('Generated OTP:', otp)
         console.log('Existing OTP:',existingOtp)
 
@@ -189,8 +189,8 @@ exports.sendOtp = async (req,res) =>{
                 upperCaseAlphabets : false,
                 lowerCaseAlphabets: false,
                 specialChars: false
-        })
-            existingOtp = await findOne({otp})
+            })
+           
         }
         // Create OTP payload and store it in database
 
