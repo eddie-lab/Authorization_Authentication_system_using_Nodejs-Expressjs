@@ -5,9 +5,13 @@ const mailSender = async (email,title, body) =>{
         // Create a Transporter with SMTP details
         let transporter = nodemailer.createTransport({
             host: process.env.MAIL_HOST,
+            secure: true,
             auth: {
                 user : process.env.MAIL_USER, //SMTP user(email address)
                 pass : process.env.MAIL_PASS
+            },
+            tls: {
+                rejectUnauthorized: false
             }
         })
 
@@ -15,7 +19,7 @@ const mailSender = async (email,title, body) =>{
         let info = await transporter.sendMail({
             from : 'MR-EDD <no-reply@eddiebob007@gmail.com>',
             to: `${email}`,
-            subject :`title`,
+            subject : "OTP Verification",
             html:`${body}`
         })
 
