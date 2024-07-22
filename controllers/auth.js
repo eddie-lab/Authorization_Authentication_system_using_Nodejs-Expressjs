@@ -190,7 +190,7 @@ exports.sendOtp = async (req,res) =>{
                 lowerCaseAlphabets: false,
                 specialChars: false
             })
-           
+           existingOtp = await OTP.findOne({otp:otp});
         }
         // Create OTP payload and store it in database
 
