@@ -1,55 +1,105 @@
 const bcrypt= require('bcrypt')
 const jwt = require('jsonwebtoken')
 const OTP = require('../models/OTP')
+const mailSender = require('../utils/mailSender')
 const otpGenerator = require('otp-generator')
 const User = require('../models/user')
 require('dotenv').config()
 
+
+// Handles Generating and Sending OTP for Email Verification
+exports.sendOtp = async (req,res) =>{
+    try {
+        const {email} = req.body
+
+        //checks if a user is found with provided email
+        const checkUser = await User.findOne({email})
+        if (checkUser) {
+            return res.status(401).json({
+                error: true,
+                message : "User is Already Registered"
+            })           
+        }
+        //Generate 6digit OTP
+        let otp = otpGenerator.generate(6,{
+            upperCaseAlphabets : false,
+            lowerCaseAlphabets: false,
+            specialChars: false
+        })
+        //Ensure otp is unique
+        let existingOtp = await OTP.findOne({otp: otp})
+        console.log('Generated OTP:', otp);
+        console.log('Existing OTP:', existingOtp);
+        
+        //if the generated OTP exists(notnull), regenerate until it is unique
+        while(existingOtp) {
+            otp =  otpGenerator.generate(6,{
+                upperCaseAlphabets : false,
+                lowerCaseAlphabets: false,
+                specialChars: false
+            })
+           existingOtp = await OTP.findOne({otp:otp});
+        }
+        // Create OTP payload and store it in database
+        const otpPayload = new OTP({email,otp})
+        const otpBody = await otpPayload.save()
+        console.log("OTP Body", otpBody)
+        res.status(200).json({
+            success: true,
+            message: "OTP Sent Successfully"
+        });
+
+    }catch (error) {
+        console.error(error.message)
+        return res.status(500).json({
+            success: false,
+            error : error.message,
+            message: 'failed to generate OTP'
+        })
+    }
+}
+
+
+
+
 // Signup handle
 exports.signup = async (req,res) =>{
     try {
-        //get input data
-        const {name, email, password, role, otp} = req.body
+        const {name, email, password,role, otp} = req.body
         
         // Check if all records are filled or not
-        if (!name || 
-            !email ||
-            !password ||
-            !otp
-        ) {
+        if (!name || !email ||!password ||!otp) {
             return res.status(403).json({
                 error : true,
                 message :'All fields are required'
             });
         }
         // check if user exists already in database
-
         const existingUser = await User.findOne({email})
         if (existingUser) {
             return res.status(400).json({
-                error : true,
+                success : false,
                 message: 'User already Exists'
             })
         }
 
         // Finding the most recent OTP generated for the Email
-        const recentOTP = await otp.find({email
-        })
-        .sort({createdAt: -1}) //sorts result in descending order based on createdAt, so the most recent otp appear first
-        .limit(1); // limits the result to only return the first document:most recent
+        const recentOTP = await OTP.findOne({email}).sort({createdAt: -1}) //sorts result in descending order based on createdAt, so the most recent otp appear first
+
         console.log(recentOTP)
         
-         //handles case where no OTP is found
-        if (recentOTP.length === 0) {
+         //Handles case where no OTP is found
+        if (!recentOTP) {
             return res.status(404).json({
-                error: 'OTP not found',
+                error: true,
                 message : 'No OTP found for the provided email'
             });
-
-        //handles case where otp provided by user does not match
-        }else if (otp !== recentOTP[0].otp){
+            
+        }
+        //Handles case where otp provided by user does not match
+        if (recentOTP.otp !== otp){
             return res.status(400).json({
-                error: 'Invalid OTP',
+                success: false,
                 message: 'The OTP provided is incorrect'
             });
 
@@ -60,8 +110,7 @@ exports.signup = async (req,res) =>{
         let hashedPassword
         try {
             hashedPassword = await bcrypt.hash(password,10)
-        }
-        catch(error) {
+        }catch(error) {
             return res.status(500).json({
                 success: false,
                 message: `Hashing password error for ${password}:` + error.message
@@ -93,7 +142,6 @@ exports.signup = async (req,res) =>{
 // Login handle
 exports.login = async(req, res)=>{
     try {
-        //fetching data from request body
         const {email,password} = req.body
 
         //validation of email and password for correctness
@@ -106,7 +154,7 @@ exports.login = async(req, res)=>{
         }
         //Checks whether user is registered
         let registeredUser= await User.findOne({email})
-        if(!User){
+        if(!registeredUser){
             return res.status(401).json({
                 success: false,
                 message: 'Unauthorized!! You have to Signup first'
@@ -115,12 +163,12 @@ exports.login = async(req, res)=>{
         }
         //Defines payload for JWT Token
         const payload = {
-            email: User.email,
-            id: User._id,
-            role: User.role
+            email: registeredUser.email,
+            id: registeredUser._id,
+            role: registeredUser.role
         }
         //verify password using bcrypt 
-        if(await bcrypt.compare(password,User.password)){
+        if(await bcrypt.compare(password,registeredUser.password)){
             //if password matches, generate JWT token
             let token = jwt.sign(
                 payload,
@@ -128,9 +176,9 @@ exports.login = async(req, res)=>{
                 {expiresIn: '2h'});
             
             // convert user object to plain js object and attach jwt token
-            User = User.toObject()
-            User.token = token
-            User.password = undefined     // removes password before sending response
+            registeredUser = registeredUser.toObject()
+            registeredUser.token = token
+            registeredUser.password = undefined     // removes password before sending response
             
             //Cookie options for storing JWT token
             const cookieOptions = {
@@ -138,14 +186,14 @@ exports.login = async(req, res)=>{
                 httpOnly: true  //Makes cookie unaccessible in client side
             }
             //setting  HTTP-only cookie with JWT token and response
-            res.cookie("token", token, options).
+            res.cookie("token", token, cookieOptions).
             status(200).json({
                 success: true,
                 token,User,
                 message: 'Logged in Successfully'
             })
         }else {
-            return res.status({
+            return res.status(401).json({
                 success: false,
                 message: 'Incorrect Password Try Again'
             })
@@ -158,58 +206,4 @@ exports.login = async(req, res)=>{
         })
     }
 }
-
-// handle Sending OTP for Email Verification
-exports.sendOtp = async (req,res) =>{
-    try {
-        const {email} = req.body
-        //checks if a user is found with provided email
-        const checkUser = await User.findOne({email})
-        //if existing user found return error message
-        if (checkUser) {
-            return res.status(401).json({
-                error: true,
-                message : "User is Already Registered"
-            })           
-        }
-        //Generate 6digit OTP
-        let otp = otpGenerator.generate(6,{
-            upperCaseAlphabets : false,
-            lowerCaseAlphabets: false,
-            specialChars: false
-        })
-        //Ensure otp is unique
-        let existingOtp = await OTP.findOne({otp: otp})
-        console.log('Generated OTP:', otp)
-        console.log('Existing OTP:',existingOtp)
-
-        //if the generated OTP exists(notnull), regenerate until it is unique
-        while(existingOtp) {
-            otp =  otpGenerator.generate(6,{
-                upperCaseAlphabets : false,
-                lowerCaseAlphabets: false,
-                specialChars: false
-            })
-           existingOtp = await OTP.findOne({otp:otp});
-        }
-        // Create OTP payload and store it in database
-
-        const otpPayload = {email,otp}
-        const otpBody = await OTP.create(otpPayload)
-        console.log("OTP Body", otpBody)
-        res.status(200).json({
-            otp,
-            success: true,
-            message : "OTP Sent Successfully"
-        })
-
-    }catch (error) {
-        console.error(error.message)
-        return res.status(500).json({
-            success: false,
-            error : error.message
-        })
-    }
-}
-
 
