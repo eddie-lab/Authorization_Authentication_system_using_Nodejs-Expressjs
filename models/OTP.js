@@ -14,7 +14,7 @@ const OTPschema = new mongoose.Schema({
     createdAt : {
         type : Date,
         default : Date.now(),
-        expires: 60 * 5
+        expires: 60 * 10
     }
 })
 
@@ -24,8 +24,11 @@ const sendVerificationEmail = async(email,otp)=>{
         //email sending using custom mailSender funtion
         const emailResponse = await mailSender(
             email,
-            "Verification Email",
-            `<h1> Please confirm your OTP:-> ${otp}</>`
+            "Verify your Email",
+            `<html>
+                <p><strong>Your OTP code is :${otp}</strong>.</p>
+                </html>`
+        
         )
         console.log("Email sent successfully:", emailResponse)
     }
