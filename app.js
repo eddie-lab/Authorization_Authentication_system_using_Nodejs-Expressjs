@@ -1,23 +1,21 @@
 const express =  require('express')
 const app = express()
+app.use(express.json())    //middlewre parsing
 
 
+require('./config/database').connect()   //database connection
+require('dotenv').config()
+const PORT = process.env.PORT || 4000
 
 
-
-// Middleware to parse JSON bodies
-app.use(express.json())
-
-
-app.get('/', (req,res) =>{
-    res.json('hello capitan')
-})
-
+// route importing and mounting
+const user = require('./routes/routes')
+app.use('/api', user)
 
 
 
 
 // start server
-app.listen(3000, ()=> {
-    console.log(`server is running on port 3000`)
+app.listen(PORT, ()=> {
+    console.log("server is running on port 4000")
 })
