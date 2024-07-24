@@ -1,4 +1,5 @@
 const nodemailer  = require('nodemailer')
+require('dotenv').config()
 
 const mailSender = async (email,title, body) =>{
     try {
@@ -15,19 +16,20 @@ const mailSender = async (email,title, body) =>{
             }
         })
 
-        // Send emails to users
-        let info = await transporter.sendMail({
-            from : 'MR-EDD <no-reply@eddiebob007@gmail.com>',
+        // Send OTP to users email
+        let mailOptions = {
+            from : 'MySchool<no-reply@eddiebob007@gmail.com>',
             to: `${email}`,
-            subject : "OTP Verification",
-            html:`${body}`
-        })
-
-        console.log('Info is here:', info)
-        return info
+            subject: "OTP Verification",
+            html: body
+            
+        }
+        return await transporter.sendMail(mailOptions)
+        
 
     }catch (error){
-        console.error(error.message)
+        console.error("Error occurred while sending email",error)
+        throw error
     }
 }
 
